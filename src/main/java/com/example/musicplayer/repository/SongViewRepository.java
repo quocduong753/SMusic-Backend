@@ -28,6 +28,7 @@ public interface SongViewRepository extends JpaRepository<SongView, Long> {
         SELECT sv.song
         FROM SongView sv
         WHERE sv.user = :user
+        AND sv.song.isUserUpload = false
         GROUP BY sv.song
         ORDER BY COUNT(sv.id) DESC
     """)

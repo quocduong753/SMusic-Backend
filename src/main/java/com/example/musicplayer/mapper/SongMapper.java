@@ -11,7 +11,6 @@ import org.mapstruct.*;
 )
 public interface SongMapper {
 
-
     Song toSong(SongRequest request);
     @Mapping(source = "artists", target = "artists")
     SongResponse toSongResponse(Song song);

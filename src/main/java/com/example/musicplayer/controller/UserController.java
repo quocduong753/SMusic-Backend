@@ -45,9 +45,7 @@ public class UserController {
     @GetMapping("/profile")
     public ResponseEntity<ApiResponse<UserResponse>> getCurrentUser() {
         User currentUser = SecurityUtil.getCurrentUser();
-        System.out.print("lay thong tin tai day");
         UserResponse response = userService.getUserInfo(currentUser);
-        System.out.print("lay thong tin" + currentUser.getId());
         return ResponseEntity.ok(new ApiResponse<>(response));
     }
 

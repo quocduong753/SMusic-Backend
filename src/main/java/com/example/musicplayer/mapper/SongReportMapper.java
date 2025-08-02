@@ -8,7 +8,6 @@ import org.mapstruct.Mapper;
 @Mapper(componentModel = "spring", uses = {SongMapper.class, UserMapper.class})
 public interface SongReportMapper {
 
-
     SongReport toSongReport(ReportSongRequest request);
 
     ReportSongResponse toReportSongResponse(SongReport report);

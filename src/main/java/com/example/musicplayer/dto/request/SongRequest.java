@@ -15,9 +15,7 @@ public class SongRequest {
     @NotBlank(message = "TITLE_REQUIRED")
     private String title;
 
-    @NotBlank(message = "URL_REQUIRED")
     private String fileUrl;
-
     private String coverImageUrl;
     private String description;
     private LocalDate releaseDate;

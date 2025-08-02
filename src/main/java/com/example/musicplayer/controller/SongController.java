@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -23,19 +24,25 @@ public class SongController {
 
     @PostMapping("/upload-song")
     public ResponseEntity<ApiResponse<SongResponse>> create(
-            @Valid @RequestBody SongRequest request) {
+            @RequestPart("songRequest") SongRequest request,
+            @RequestPart("audioFile") MultipartFile audioFile,
+            @RequestPart(value = "coverImage", required = false) MultipartFile coverImage
+    ) {
+        System.out.print("Goi upload1");
         User currentUser = SecurityUtil.getCurrentUser();
-        SongResponse response = songService.createSong(request, currentUser);
+        SongResponse response = songService.handleUpload(request, currentUser, audioFile, coverImage);
         return ResponseEntity.ok(new ApiResponse<>(response));
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<SongResponse>> updateSong(
             @PathVariable Long id,
-            @Valid @RequestBody SongRequest request
+            @RequestPart("songRequest") @Valid SongRequest request,
+            @RequestPart(value = "coverImage", required = false) MultipartFile coverImage
     ) {
         User currentUser = SecurityUtil.getCurrentUser();
-        SongResponse response = songService.updateSong(id, request, currentUser);
+        System.out.print("Goi upload");
+        SongResponse response = songService.updateSong(id, request, currentUser, coverImage);
         return ResponseEntity.ok(new ApiResponse<>(response));
     }
 
@@ -79,7 +86,7 @@ public class SongController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
 
-        List<SongResponse> songs = songService.getRandomSystemSongs(page);
+        List<SongResponse> songs = songService.getRandomSystemSongs(size);
         return ResponseEntity.ok(new ApiResponse<>(songs));
     }
 

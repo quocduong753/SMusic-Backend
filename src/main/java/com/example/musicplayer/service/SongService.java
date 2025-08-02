@@ -22,7 +22,11 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Path;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -39,6 +43,8 @@ public class SongService {
     private final GenreRepository genreRepository;
     private final SongLikeRepository songLikeRepository;
     private final NotificationService notificationService;
+    private final SupabaseStorageService supabaseStorageService;
+    private final HlsService hlsService;
 
     private SongResponse enrichSongResponse(Song song, User currentUser) {
         SongResponse response = songMapper.toSongResponse(song);
@@ -50,6 +56,46 @@ public class SongService {
         }
         return response;
     }
+
+    public SongResponse handleUpload(SongRequest songRequest,
+                                     User currentUser,
+                                     MultipartFile audioFile,
+                                     MultipartFile coverImage) {
+        Path hlsFolder = null;
+        File tempImage = null;
+
+        try {
+            hlsFolder = hlsService.convertToHls(songRequest.getTitle(), audioFile);
+
+            String hlsUrl = supabaseStorageService.uploadHlsFolder(hlsFolder, songRequest.getTitle());
+
+            tempImage = File.createTempFile("cover-", ".jpg");
+            coverImage.transferTo(tempImage);
+            String coverUrl = supabaseStorageService.uploadCoverImage(tempImage, songRequest.getTitle());
+
+            songRequest.setFileUrl(hlsUrl);
+            songRequest.setCoverImageUrl(coverUrl);
+
+            return createSong(songRequest, currentUser);
+        } catch (Exception e) {
+            throw new AppException(ErrorCode.INTERNAL_SERVER_ERROR);
+        } finally {
+            if (hlsFolder != null) {
+                try {
+                    hlsService.deleteDirectoryIfExists(hlsFolder);
+                } catch (Exception ex) {
+                    System.err.println("⚠️ Không thể xoá thư mục tạm: " + hlsFolder);
+                    ex.printStackTrace();
+                }
+            }
+
+            // 7. Xoá file ảnh tạm
+            if (tempImage != null && tempImage.exists()) {
+                tempImage.delete();
+            }
+        }
+    }
+
 
     public SongResponse createSong(SongRequest request, User currentUser) {
         Song song = songMapper.toSong(request);
@@ -79,7 +125,7 @@ public class SongService {
 
 
     @Transactional
-    public SongResponse updateSong(Long songId, SongRequest request, User currentUser) {
+    public SongResponse updateSong(Long songId, SongRequest request, User currentUser, MultipartFile coverImage) {
         Song song = songRepository.findById(songId)
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND));
 
@@ -87,14 +133,36 @@ public class SongService {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
+        // Cập nhật thông tin từ request
         songMapper.updateSongFromRequest(request, song);
 
+        // Cập nhật thể loại
         Genre genre = genreRepository.findById(request.getGenreId())
                 .orElseThrow(() -> new AppException(ErrorCode.INVALID_INPUT));
         song.setGenre(genre);
 
+        // ✅ Nếu có ảnh bìa mới: xoá ảnh cũ và upload ảnh mới
+        if (coverImage != null && !coverImage.isEmpty()) {
+            // Xoá ảnh cũ nếu có
+            String oldCoverUrl = song.getCoverImageUrl();
+            if (oldCoverUrl != null && oldCoverUrl.contains("/cover/")) {
+                String filename = oldCoverUrl.substring(oldCoverUrl.lastIndexOf("/") + 1);
+                supabaseStorageService.deleteCoverImage(filename);
+            }
+
+            try {
+                File tempImage = File.createTempFile("cover-", ".jpg");
+                coverImage.transferTo(tempImage);
+                String newCoverUrl = supabaseStorageService.uploadCoverImage(tempImage, song.getTitle());
+                song.setCoverImageUrl(newCoverUrl);
+            } catch (IOException e) {
+                throw new AppException(ErrorCode.INTERNAL_SERVER_ERROR);
+            }
+        }
+
         return songMapper.toSongResponse(songRepository.save(song));
     }
+
 
     @Transactional
     public void deleteSong(Long songId, User currentUser) {
